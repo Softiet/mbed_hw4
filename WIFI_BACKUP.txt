@@ -1,0 +1,28 @@
+      
+//  CLOSE OPERATION
+
+      int num = 0;
+      while (num != 5) {
+            client.yield(100);
+            ++num;
+      }
+
+
+      while (1) {
+            if (closed) break;
+            wait(0.5);
+      }
+
+
+      printf("Ready to close MQTT Network......\n");
+      if ((rc = client.unsubscribe(topic)) != 0) {
+            printf("Failed: rc from unsubscribe was %d\n", rc);
+      }
+
+      if ((rc = client.disconnect()) != 0) {
+      printf("Failed: rc from disconnect was %d\n", rc);
+      }
+
+
+      mqttNetwork.disconnect();
+      printf("Successfully closed!\n");
