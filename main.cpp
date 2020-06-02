@@ -30,6 +30,9 @@
 #define FXOS8700Q_M_CTRL_REG2 0x5C
 #define FXOS8700Q_WHOAMI_VAL 0xC7
 
+// INCLUDE :: RPC
+#include "mbed_rpc.h"
+
 // GENERAL VARIABLES
 InterruptIn btn2(SW2);
 InterruptIn btn3(SW3);
@@ -56,6 +59,7 @@ float acc_t[3];
 RawSerial xbee(D12, D11);
 EventQueue xbee_queue(32 * EVENTS_EVENT_SIZE);
 Thread xbee_t;
+char xbee_reply[4];
 
 // FUNCTIONS DECLARE :: WIFI
 void messageArrived(MQTT::MessageData& md);
@@ -121,7 +125,6 @@ int main() {
       mqtt_thread.start(callback(&mqtt_queue, &EventQueue::dispatch_forever));
       
       // XBEE INITIALIZING
-      char xbee_reply[4];
             // XBee setting
       xbee.baud(9600);
       xbee.printf("+++");
@@ -228,7 +231,7 @@ void acc_print(){
 // FUNCTIONS :: XBEE
 void xbee_rx_interrupt(void){
   xbee.attach(NULL, Serial::RxIrq); // detach interrupt
-  queue.call(&xbee_rx);
+  xbee_queue.call(&xbee_rx);
 }
 
 void xbee_rx(void){
