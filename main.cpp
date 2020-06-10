@@ -38,6 +38,15 @@ InterruptIn btn2(SW2);
 InterruptIn btn3(SW3);
 Serial pc(USBTX, USBRX);
 
+int rampage_mode = 0;
+int rampage_count = 0;
+int read_counts = 0;
+int wait_time = 500;
+int timestamp = 0;
+// GLOBAL VARIABLES :: GENERAL
+Thread ctrl_thread(osPriorityHigh);
+EventQueue ctrl_queue;
+
 // GLOBAL VARIABLES :: WIFI
 WiFiInterface *wifi;
 volatile int message_num = 0;
@@ -60,6 +69,8 @@ RawSerial xbee(D12, D11);
 EventQueue xbee_queue(32 * EVENTS_EVENT_SIZE);
 Thread xbee_t;
 char xbee_reply[4];
+// FUNCTIONS DECLARE :: GENERAL
+void publish_message_acc(MQTT::Client<MQTTNetwork, Countdown>* client);
 
 // FUNCTIONS DECLARE :: WIFI
 void messageArrived(MQTT::MessageData& md);
@@ -69,13 +80,17 @@ inline void close_mqtt() {wifi_closed = true;}
 // FUNCTIONS DECLARE :: ACCELEROMETER
 void FXOS8700CQ_readRegs(int addr, uint8_t * data, int len);
 void FXOS8700CQ_writeRegs(uint8_t * data, int len);
-void acc_print();
+void acc_update();
 
 // FUNCRION DECLARE :: XBEE
 void xbee_rx_interrupt(void);
 void xbee_rx(void);
 void reply_messange(char *xbee_reply, char *messange);
 void check_addr(char *xbee_reply, char *messenger);
+
+// FUNCTION DECARE :: RPC
+void getCounts(Arguments *in , Reply *out);
+RPCFunction rpcGetCounts(&getCounts, "getCounts");
 
 int main() {
       // ACCELERO INITIALIZING
@@ -87,7 +102,7 @@ int main() {
       FXOS8700CQ_writeRegs(acc_data, 2);
             // Get the slave address
       FXOS8700CQ_readRegs(FXOS8700Q_WHOAMI, &who_am_i, 1);
-      pc.printf("Here is %x,\r\n ACC ALL SYSTEM GO\r\n", who_am_i);
+      pc.printf("Here is %x,\r\nACC ALL SYSTEM GO\r\n", who_am_i);
 
       // WIFI INITIALIZING
       wifi = WiFiInterface::get_default_instance();
@@ -104,7 +119,7 @@ int main() {
       NetworkInterface* net = wifi;
       MQTTNetwork mqttNetwork(net);
       MQTT::Client<MQTTNetwork, Countdown> client(mqttNetwork);
-      //TODO: revise host to your ip
+            //TODO: revise host to your ip
       const char* host = "192.168.43.189";
       printf("Connecting to TCP network...\r\n");
       int rc = mqttNetwork.connect(host, 1883);
@@ -122,25 +137,26 @@ int main() {
       if (client.subscribe(topic, MQTT::QOS0, messageArrived) != 0){
             printf("Fail to subscribe\r\n");
       }
-      mqtt_thread.start(callback(&mqtt_queue, &EventQueue::dispatch_forever));
-      
+
+
       // XBEE INITIALIZING
             // XBee setting
+      printf("INITIALIZING XBEE\r\n");
       xbee.baud(9600);
       xbee.printf("+++");
       xbee_reply[0] = xbee.getc();
       xbee_reply[1] = xbee.getc();
       if(xbee_reply[0] == 'O' && xbee_reply[1] == 'K'){
-            pc.printf("enter AT mode.\r\n");
+            printf("enter AT mode.\r\n");
             xbee_reply[0] = '\0';
             xbee_reply[1] = '\0';
       }
-      xbee.printf("ATMY <REMOTE_MY>\r\n");
-      reply_messange(xbee_reply, "setting MY : <REMOTE_MY>");
-      xbee.printf("ATDL <REMOTE_DL>\r\n");
-      reply_messange(xbee_reply, "setting DL : <REMOTE_DL>");
-      xbee.printf("ATID <PAN_ID>\r\n");
-      reply_messange(xbee_reply, "setting PAN ID : <PAN_ID>");
+      xbee.printf("ATMY 0x240\r\n");
+      reply_messange(xbee_reply, "setting MY : 0x240");
+      xbee.printf("ATDL 0x140\r\n");
+      reply_messange(xbee_reply, "setting DL : 0x140");
+      xbee.printf("ATID 0x26\r\n");
+      reply_messange(xbee_reply, "setting PAN ID : 0x26");
       xbee.printf("ATWR\r\n");
       reply_messange(xbee_reply, "write config");
       xbee.printf("ATMY\r\n");
@@ -152,19 +168,82 @@ int main() {
       xbee.getc();
       // start
       pc.printf("start\r\n");
+      
+      while(xbee.readable()){
+            xbee.getc();
+      }
       xbee_t.start(callback(&xbee_queue, &EventQueue::dispatch_forever));
       // Setup a serial interrupt function of receiving data from xbee
       xbee.attach(xbee_rx_interrupt, Serial::RxIrq);
 
       // GENERAL CODE
-      btn2.rise(mqtt_queue.event(&publish_message, &client));
-      btn3.rise(&close_mqtt);
+      while(1){
+            wait_ms(wait_time);
+            timestamp = timestamp + wait_time;
+            acc_update();
+            publish_message_acc(&client);
+            if(acc_t[2] <= 1/sqrt(2)){
+                  rampage_mode = 1;
+                  wait_time = 100;
+            }
+            if(rampage_mode = 1){
+                  rampage_count++;
+            }
+            if(rampage_count == 10){
+                  rampage_count = 0;
+                  rampage_mode = 1;
+                  wait_time = 500;
+            }
+            read_counts++;
+      }
+      
+      // ctrl_queue.call_every(1000,publish_message_acc,&client);
+      // ctrl_thread.start(callback(&ctrl_queue, &EventQueue::dispatch_forever));
 
-
-
+      
 
       return 0;
 
+}
+
+// FUNCTIONS :: GENERAL 
+      // MERGED FOM WIFI AND ACCELERO
+void publish_message_acc(MQTT::Client<MQTTNetwork, Countdown>* client) {
+      message_num++;
+      MQTT::Message message;
+      char buff[100];
+      
+      acc16 = (acc_res[0] << 6) | (acc_res[1] >> 2);
+      if (acc16 > UINT14_MAX/2)
+         acc16 -= UINT14_MAX;
+      acc_t[0] = ((float)acc16) / 4096.0f;
+      acc16 = (acc_res[2] << 6) | (acc_res[3] >> 2);
+      if (acc16 > UINT14_MAX/2)
+         acc16 -= UINT14_MAX;
+      acc_t[1] = ((float)acc16) / 4096.0f;
+      acc16 = (acc_res[4] << 6) | (acc_res[5] >> 2);
+      if (acc16 > UINT14_MAX/2)
+         acc16 -= UINT14_MAX;
+      acc_t[2] = ((float)acc16) / 4096.0f;
+      
+      sprintf(buff,"ACC %d : X= %1.4f Y= %1.4f Z= %1.4f \r\n",timestamp,acc_t[0],acc_t[1],acc_t[2]);
+
+      message.qos = MQTT::QOS0;
+      message.retained = false;
+      message.dup = false;
+      message.payload = (void*) buff;
+      message.payloadlen = strlen(buff) + 1;
+      // printf("We ever reached here\n\r");
+      int rc = client->publish(topic, message);
+      // printf("rc:  %d\r\n", rc);
+      // printf("Puslish message: %s\r\n", buff);
+}
+
+void getCounts(Arguments *in, Reply *out){
+      printf("RPC get called\n\r");
+      int temp = read_counts;
+      read_counts = 0;
+      out->putData(temp);
 }
 
 
@@ -184,7 +263,7 @@ void messageArrived(MQTT::MessageData& md) {
 void publish_message(MQTT::Client<MQTTNetwork, Countdown>* client) {
       message_num++;
       MQTT::Message message;
-      char buff[100];
+      char buff[200];
       sprintf(buff, "QoS0 Hello, Python! #%d", message_num);
       message.qos = MQTT::QOS0;
       message.retained = false;
@@ -207,7 +286,7 @@ void FXOS8700CQ_writeRegs(uint8_t * data, int len) {
    i2c.write(m_addr, (char *)data, len);
 }
 
-void acc_print(){
+void acc_update(){
       FXOS8700CQ_readRegs(FXOS8700Q_OUT_X_MSB, acc_res, 6);
       acc16 = (acc_res[0] << 6) | (acc_res[1] >> 2);
       if (acc16 > UINT14_MAX/2)
@@ -221,11 +300,6 @@ void acc_print(){
       if (acc16 > UINT14_MAX/2)
          acc16 -= UINT14_MAX;
       acc_t[2] = ((float)acc16) / 4096.0f;
-      printf("FXOS8700Q ACC: X=%1.4f(%x%x) Y=%1.4f(%x%x) Z=%1.4f(%x%x)\r\n",\
-            acc_t[0], acc_res[0], acc_res[1],\
-            acc_t[1], acc_res[2], acc_res[3],\
-            acc_t[2], acc_res[4], acc_res[5]\
-      );
 }
 
 // FUNCTIONS :: XBEE
@@ -246,9 +320,11 @@ void xbee_rx(void){
       buf[i] = pc.putc(recv);
     }
     RPC::call(buf, outbuf);
-    pc.printf("%s\r\n", outbuf);
-    wait(0.1);
+    printf("we get something: %s\n\r", buf);
+    printf("we replied: %s\n\r",outbuf);
+    wait(0.05);  
   }
+  xbee.printf("%s\n\r",outbuf);
   xbee.attach(xbee_rx_interrupt, Serial::RxIrq); // reattach interrupt
 }
 
@@ -257,7 +333,7 @@ void reply_messange(char *xbee_reply, char *messange){
   xbee_reply[1] = xbee.getc();
   xbee_reply[2] = xbee.getc();
   if(xbee_reply[1] == 'O' && xbee_reply[2] == 'K'){
-    pc.printf("%s\r\n", messange);
+    printf("%s\r\n", messange);
     xbee_reply[0] = '\0';
     xbee_reply[1] = '\0';
     xbee_reply[2] = '\0';
@@ -269,7 +345,7 @@ void check_addr(char *xbee_reply, char *messenger){
   xbee_reply[1] = xbee.getc();
   xbee_reply[2] = xbee.getc();
   xbee_reply[3] = xbee.getc();
-  pc.printf("%s = %c%c%c\r\n", messenger, xbee_reply[1], xbee_reply[2], xbee_reply[3]);
+  printf("%s = %c%c%c\r\n", messenger, xbee_reply[1], xbee_reply[2], xbee_reply[3]);
   xbee_reply[0] = '\0';
   xbee_reply[1] = '\0';
   xbee_reply[2] = '\0';

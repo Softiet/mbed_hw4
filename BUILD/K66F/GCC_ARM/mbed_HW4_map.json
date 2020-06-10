@@ -3,11 +3,11 @@
         "module": "[fill]",
         "size": {
             ".text": 305,
-            ".data": 16,
-            ".bss": 48,
-            ".text-delta": 5,
+            ".data": 12,
+            ".bss": 45,
+            ".text-delta": -5,
             ".data-delta": 0,
-            ".bss-delta": -8
+            ".bss-delta": 0
         }
     },
     {
@@ -16,7 +16,7 @@
             ".text": 50690,
             ".data": 2472,
             ".bss": 89,
-            ".text-delta": 200,
+            ".text-delta": 0,
             ".data-delta": 0,
             ".bss-delta": 0
         }
@@ -68,12 +68,12 @@
     {
         "module": "main.o",
         "size": {
-            ".text": 5244,
-            ".data": 8,
-            ".bss": 908,
-            ".text-delta": 478,
+            ".text": 5502,
+            ".data": 12,
+            ".bss": 1375,
+            ".text-delta": 5,
             ".data-delta": 0,
-            ".bss-delta": 4
+            ".bss-delta": 0
         }
     },
     {
@@ -101,7 +101,7 @@
     {
         "module": "mbed-os/drivers",
         "size": {
-            ".text": 4864,
+            ".text": 4788,
             ".data": 0,
             ".bss": 44,
             ".text-delta": 0,
@@ -112,7 +112,7 @@
     {
         "module": "mbed-os/events",
         "size": {
-            ".text": 1841,
+            ".text": 1835,
             ".data": 0,
             ".bss": 3108,
             ".text-delta": 0,
@@ -148,7 +148,7 @@
             ".text": 10279,
             ".data": 261,
             ".bss": 437,
-            ".text-delta": 192,
+            ".text-delta": 0,
             ".data-delta": 0,
             ".bss-delta": 0
         }
@@ -167,7 +167,7 @@
     {
         "module": "mbed-os/targets",
         "size": {
-            ".text": 15251,
+            ".text": 15107,
             ".data": 36,
             ".bss": 950,
             ".text-delta": 0,
@@ -178,10 +178,21 @@
     {
         "module": "mbed_rpc/Arguments.o",
         "size": {
-            ".text": 308,
+            ".text": 343,
             ".data": 0,
             ".bss": 0,
-            ".text-delta": 308,
+            ".text-delta": 0,
+            ".data-delta": 0,
+            ".bss-delta": 0
+        }
+    },
+    {
+        "module": "mbed_rpc/RPCFunction.o",
+        "size": {
+            ".text": 100,
+            ".data": 0,
+            ".bss": 0,
+            ".text-delta": 0,
             ".data-delta": 0,
             ".bss-delta": 0
         }
@@ -189,12 +200,12 @@
     {
         "module": "mbed_rpc/rpc.o",
         "size": {
-            ".text": 421,
+            ".text": 647,
             ".data": 16,
             ".bss": 4,
-            ".text-delta": 421,
-            ".data-delta": 16,
-            ".bss-delta": 4
+            ".text-delta": 0,
+            ".data-delta": 0,
+            ".bss-delta": 0
         }
     },
     {
@@ -210,10 +221,10 @@
     },
     {
         "summary": {
-            "static_ram": 16336,
-            "static_ram_delta": 16,
-            "total_flash": 138419,
-            "total_flash_delta": 1620
+            "static_ram": 16800,
+            "static_ram_delta": 0,
+            "total_flash": 138812,
+            "total_flash_delta": 0
         }
     }
 ]
